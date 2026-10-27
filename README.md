@@ -113,9 +113,7 @@ Il componente Emulated Hue memorizza gli ID univoci generati in un file di stora
    ```
    *(Nota: Se non trovi il file, salta pure questo passaggio, verrà rigenerato automaticamente al primo avvio).*
 
----
-
-## Fase 3: Applicazione del file YAML definitivo
+### Fase 3: Applicazione del file YAML definitivo
 Nel tuo file di configurazione principale (`configuration.yaml`), struttura le entità assegnando a ognuna il proprio tipo e la proprietà di reset dell'ID:
 
 ```yaml
