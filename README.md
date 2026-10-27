@@ -93,6 +93,71 @@ emulated_hue:
 
 ## 🔄 Come aggiornare i dispositivi già presenti su Alexa
 
+### Fase 1: Pulizia totale dei dispositivi su Alexa
+Prima di toccare Home Assistant, è fondamentale rimuovere qualsiasi residuo dal Cloud di Amazon.
+
+1. Apri l'**App Alexa** sul tuo smartphone.
+2. Vai su **Dispositivi** e seleziona la lista completa.
+3. Entra uno ad uno nei dispositivi collegati tramite Emulated Hue e **rimuovili/cestinziali** tutti.
+4. Esci dall'app o chiudila completamente per evitare che mantenga dati in cache.
+5. Togli alimentazione a tutti i tuoi dispositivi Alexa e dopo un paio di minuti accendine solo uno che farà da Hub Master
+
+### Fase 2: Pulizia dei file di storage su Home Assistant
+Il componente Emulated Hue memorizza gli ID univoci generati in un file di storage locale. Per evitare conflitti con i vecchi MAC address, bisogna eliminarlo.
+
+1. Accedi a Home Assistant tramite File Editor o SSH.
+2. Posizionati nella cartella nascosta `.storage/`.
+3. Individua e cancella il file:
+   ```text
+   .storage/emulated_hue.ids
+   ```
+   *(Nota: Se non trovi il file, salta pure questo passaggio, verrà rigenerato automaticamente al primo avvio).*
+
+---
+
+## Fase 3: Applicazione del file YAML definitivo
+Nel tuo file di configurazione principale (`configuration.yaml`), struttura le entità assegnando a ognuna il proprio tipo e la proprietà di reset dell'ID:
+
+```yaml
+emulated_hue:
+  host_ip: 192.168.1.246
+  listen_port: 80
+  expose_by_default: false
+  entities:
+    # Esempio per una luce
+    switch.luce_cucina:
+      name: "Luce Cucina"
+      hidden: false
+      hue_type: "light"
+      reset_id: true
+
+    # Esempio per una presa o elettrodomestico
+    switch.forno:
+      name: "Forno"
+      hidden: false
+      hue_type: "other"
+      reset_id: true
+```
+
+* **`hue_type: "light"`**: Forza l'apparato a essere visto da Alexa come una lampadina (`modelid: HASS321`).
+* **`hue_type: "other"`**: Forza l'apparato a essere visto da Alexa come una presa/interruttore generico (`modelid: LOM001`), isolandolo dai gruppi di illuminazione.
+* **`reset_id: true`**: Permette al sistema di ricalcolare l'ID univoco in caso di modifiche future, evitando sdoppiamenti o blocchi di cache.
+
+---
+
+### Fase 4: Riavvio e Nuova Scansione
+1. Salva il file YAML e **riavvia interamente Home Assistant**.
+2. Verifica che il bridge risponda correttamente aprendo nel browser l'indirizzo:
+   `http://<IP_DI_HOME_ASSISTANT>/api/nouser/lights` (dovresti vedere l'elenco in formato JSON di tutte le entità configurate).
+3. Prendi l'Echo principale (es. *Alexa Sala*) e procedi alla ricerca:
+   * **Tramite voce:** Pronuncia *"Alexa, scopri dispositivi"*.
+   * **Tramite app:** Vai su App Alexa -> Dispositivi -> Aggiungi dispositivo -> Altro / Philips Hue -> Ricerca dispositivi.
+4. Attendi il completamento della scansione.
+
+### Fase 5: Ripristino finale
+1. Una volta completata con successo la scoperta dei dispositivi puliti, puoi **riaccendere gli altri Echo** della casa
+2. Esegui un test rapido accendendo/spegnendo un paio di entità (sia di tipo luce che di tipo other) per confermare la piena operatività.
+
 ## ☕ Supporta il Progetto
 
 Ogni piccolo supporto fa un'enorme differenza: mi aiuta a mantenere vivo l'entusiasmo e mi stimola a creare e condividere nuove soluzioni per la community. Grazie di cuore per il tuo aiuto! 🚀
