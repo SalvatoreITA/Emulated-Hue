@@ -4,7 +4,7 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/SalvatoreITA/Emulated-Hue/blob/main/README.md)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-v1.1.0-blue.svg)]()
+[![version](https://img.shields.io/badge/version-v1.0.0-blue.svg)]()
 [![maintainer](https://img.shields.io/badge/maintainer-Salvatore_Lentini_--_DomHouse.it-green.svg)](https://www.domhouse.it)
 
 
@@ -28,13 +28,13 @@ Questa versione Custom risolve il problema alla radice, permettendo di decidere 
    - **insieme a `hue_type`** -> l'`uniqueid` viene generato da `entity_id` + modello (`modelid`): ogni cambio di `hue_type` produce automaticamente un nuovo ID e Alexa rileva subito la nuova categoria;
    - **senza `hue_type`** -> l'entità riceve un nuovo ID fisso, utile per forzare Alexa a ri-scoprire un dispositivo "incastrato".
 
-3. **ID univoci stabili, niente doppioni** *(novità v1.1.0)*:
-   L'`uniqueid` non dipende mai dallo stato dell'entità. Nella versione precedente una luce dimmerabile/RGB che andava `unavailable` perdeva le sue funzioni, veniva declassata a On/Off e cambiava ID: Alexa la vedeva come un dispositivo nuovo e creava doppioni. Ora l'ID resta sempre lo stesso.
+3. **ID univoci stabili, niente doppioni**:
+   L'`uniqueid` non dipende mai dallo stato dell'entità. Quando una luce dimmerabile/RGB va `unavailable` perde le sue funzioni e viene vista temporaneamente come On/Off: se l'ID dipendesse dal tipo, cambierebbe e Alexa la vedrebbe come un dispositivo nuovo, creando doppioni. Qui l'ID resta sempre lo stesso.
 
-4. **Numeri dei dispositivi mai riutilizzati** *(novità v1.1.0)*:
-   Ogni entità esposta riceve un numero progressivo, che è quello con cui Alexa la comanda. Il componente salva il numero più alto mai assegnato, così un numero liberato (entità rimossa) **non viene mai riassegnato** a un'entità nuova. Prima, togliendo l'ultima entità e aggiungendone un'altra, la nuova ereditava il numero della vecchia e Alexa comandava il dispositivo sbagliato.
+4. **Numeri dei dispositivi mai riutilizzati**:
+   Ogni entità esposta riceve un numero progressivo, che è quello con cui Alexa la comanda. Il componente salva il numero più alto mai assegnato, così un numero liberato dalla pulizia automatica (entità rimossa) **non viene mai riassegnato** a un'entità nuova. Altrimenti la nuova entità erediterebbe il numero della vecchia, che Alexa ha ancora in memoria, e un comando o una routine pensati per il vecchio dispositivo azionerebbero quello nuovo.
 
-5. **Echo master unico (`upnp_allowed_ips`)** *(novità v1.1.0)*:
+5. **Echo master unico (`upnp_allowed_ips`)**:
    Gli Echo cercano dispositivi in rete (SSDP) di continuo: all'avvio, a intervalli e a ogni ricerca lanciata da un altro Echo. Con l'Hue locale, Alexa lega i dispositivi **all'Echo che li ha trovati**, quindi in una casa con più Echo i dispositivi finiscono sparsi o duplicati ogni volta che un Echo si riavvia. Con `upnp_allowed_ips` il bridge risponde alla ricerca **solo** agli IP indicati: tutti i dispositivi restano sempre legati al tuo Echo master. I comandi vocali dati agli altri Echo continuano a funzionare normalmente.
 
 6. **Auto-Pulizia del file `.storage/emulated_hue.ids`**:
@@ -199,14 +199,10 @@ emulated_hue:
 1. Se avevi spento gli altri Echo, una volta completata con successo la scoperta dei dispositivi puoi **riaccenderli**.
 2. Esegui un test rapido accendendo/spegnendo un paio di entità (sia di tipo luce che di tipo other) per confermare la piena operatività.
 
-## 🆙 Aggiornamento dalla v1.0.0
+## 🔁 Passaggio dall'integrazione ufficiale
 
-- **Nessuna azione sul file degli ID**: al primo avvio il file `.storage/emulated_hue.ids` viene convertito automaticamente nel nuovo formato. Tutte le associazioni numero ↔ entità restano identiche.
-- **Entità con `hue_type`**: l'ID univoco non cambia, Alexa non le vede come nuove.
-- **Luci `light.*` senza `hue_type`** (dimmerabili/RGB): ricevono una sola volta un nuovo ID stabile. Dopo l'aggiornamento esegui *"Alexa, scopri dispositivi"*, rimuovi dall'app i vecchi doppioni rimasti offline e, se le usavi in routine o gruppi, riassegnale.
-- **Nuova opzione `upnp_allowed_ips`**: facoltativa. Se non la aggiungi, il comportamento resta quello di prima.
-
-> ⚠️ Se aggiungi `upnp_allowed_ips` allo YAML **prima** di aver riavviato con la nuova versione, il controllo configurazione di Home Assistant (che usa ancora il codice vecchio) la segnala come opzione non valida. Aggiorna, riavvia, e solo dopo aggiungi l'opzione e riavvia di nuovo.
+- **File degli ID**: se arrivi dall'Emulated Hue ufficiale, il file `.storage/emulated_hue.ids` viene convertito automaticamente nel formato di questo componente al primo avvio. Le associazioni numero ↔ entità restano identiche. Se preferisci ripartire da zero, segui la procedura *Come aggiornare i dispositivi già presenti su Alexa*.
+- **Opzioni custom**: `hue_type`, `reset_id` e `upnp_allowed_ips` esistono solo in questo componente. Installalo e **riavvia** Home Assistant **prima** di aggiungerle allo YAML: altrimenti il controllo configurazione (che usa ancora l'integrazione ufficiale) le segnala come opzioni non valide e blocca il riavvio.
 
 ## 🔍 Diagnostica: leggere il log
 
