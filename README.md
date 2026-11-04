@@ -4,7 +4,7 @@
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/SalvatoreITA/Emulated-Hue/blob/main/README.md)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-v1.1.0-blue.svg)]()
+[![version](https://img.shields.io/badge/version-v1.0.0-blue.svg)]()
 [![maintainer](https://img.shields.io/badge/maintainer-Salvatore_Lentini_--_DomHouse.it-green.svg)](https://www.domhouse.it)
 
 
@@ -42,6 +42,9 @@ Questa versione Custom risolve il problema alla radice, permettendo di decidere 
 
 7. **Log di Home Assistant sempre puliti**:
    Le richieste residue degli Echo verso vecchi ID rimossi vengono gestite a livello `DEBUG` anziché `ERROR`, eliminando i fastidiosi errori rossi nel registro di sistema di Home Assistant.
+
+8. **Sensori di diagnostica**:
+   Il componente crea due sensori per tenere d'occhio il bridge senza aprire i log (vedi *Sensori di diagnostica* più sotto).
 
 ## 📦 Installazione
 
@@ -238,6 +241,8 @@ logger:
 UPNP M-SEARCH da 192.168.1.50 accettato: ...
 UPNP risposta a 192.168.1.50: ...
 UPNP M-SEARCH da 192.168.1.60 ignorato (non autorizzato)
+HTTP GET /api/nouser/lights/12 da 192.168.1.50 -> 200
+HTTP PUT /api/nouser/lights/12/state da 192.168.1.50 -> 200
 ```
 
 | Riga | Significato |
@@ -245,11 +250,44 @@ UPNP M-SEARCH da 192.168.1.60 ignorato (non autorizzato)
 | `M-SEARCH da <IP> accettato` | Un dispositivo autorizzato (il tuo master) sta cercando il bridge. |
 | `risposta a <IP>` | Il bridge ha risposto: quel dispositivo può trovare e collegare le entità. |
 | `M-SEARCH da <IP> ignorato (non autorizzato)` | Un dispositivo non presente in `upnp_allowed_ips` ha cercato il bridge ed è stato ignorato. È normale: gli Echo e molti altri dispositivi (TV, media server...) fanno queste ricerche di continuo. |
+| `HTTP GET .../lights/<N>` | Un Echo legge lo stato del dispositivo numero N. Il master lo fa di continuo, anche senza comandi. |
+| `HTTP PUT .../lights/<N>/state` | Un **comando** (accendi/spegni/dimmera) sul dispositivo N. Il numero finale è l'esito: `200` = eseguito. |
 
 **Problemi tipici:**
 - **La ricerca su Alexa non trova nulla** e nel log non compare mai `accettato`: l'IP in `upnp_allowed_ips` non è quello del master (o è cambiato), oppure il master è spento/su un'altra rete.
 - **Nessuna riga `M-SEARCH`**: il debug non è attivo, oppure gli Echo non sono nella stessa rete di Home Assistant.
-- **Dispositivi legati a un Echo sbagliato**: sono residui di ricerche precedenti. Rimuovili dall'app Alexa e ripeti la ricerca: con il filtro attivo torneranno sul master.
+- **Dispositivi "non risponde" ma nel log ci sono i `GET` del master**: il bridge funziona e l'Echo lo legge in locale, ma non riceve i comandi dal cloud Amazon. Se dando un comando non compare nessun `PUT`, l'Echo master è bloccato: togligli corrente per qualche minuto e riaccendilo.
+- **Dispositivi legati a un Echo sbagliato**: nel log compaiono `GET` da un IP diverso dal master. Rimuovi quei dispositivi dall'app Alexa e ripeti la ricerca: con il filtro attivo torneranno sul master.
+
+## 📊 Sensori di diagnostica
+
+Il componente crea automaticamente due sensori:
+
+| Sensore | Cosa indica |
+| ----- | ----- |
+| `sensor.emulated_hue_ultimo_contatto_master` | Data e ora dell'ultima richiesta HTTP arrivata al bridge dall'Echo master (gli IP in `upnp_allowed_ips`; se l'opzione non è impostata, da qualunque dispositivo). |
+| `sensor.emulated_hue_ip_non_autorizzati` | Quanti IP **non** presenti in `upnp_allowed_ips` hanno chiamato le API del bridge. L'attributo `ip` elenca gli indirizzi e l'ora dell'ultima richiesta. Utile per scoprire Echo che si ricordano il bridge e lo interrogano direttamente. Conta anche il tuo PC, se apri `/api/nouser/lights` dal browser. |
+
+I sensori si aggiornano al massimo una volta al minuto, per non riempire il database. I valori si azzerano a ogni riavvio di Home Assistant.
+
+### Esempio: avviso se l'Echo master sparisce
+
+```yaml
+automation:
+  - alias: "Emulated Hue - Echo master non risponde"
+    triggers:
+      - trigger: template
+        value_template: >
+          {% set s = states('sensor.emulated_hue_ultimo_contatto_master') %}
+          {{ s not in ['unknown', 'unavailable']
+             and (now() - as_datetime(s)).total_seconds() > 600 }}
+    actions:
+      - action: notify.notify
+        data:
+          message: "L'Echo master non contatta il bridge da più di 10 minuti"
+```
+
+> ℹ️ Questo avviso scatta quando il master è spento, senza rete o non raggiunge Home Assistant. Non scatta se l'Echo è acceso e in rete ma ha perso il collegamento col cloud Amazon: in quel caso continua a leggere il bridge in locale.
 
 ## ☕ Supporta il Progetto
 
