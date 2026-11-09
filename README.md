@@ -28,6 +28,8 @@ Questa versione Custom risolve il problema alla radice, permettendo di decidere 
    - **insieme a `hue_type`** -> l'`uniqueid` viene generato da `entity_id` + modello (`modelid`): ogni cambio di `hue_type` produce automaticamente un nuovo ID e Alexa rileva subito la nuova categoria;
    - **senza `hue_type`** -> l'entità riceve un nuovo ID fisso, utile per forzare Alexa a ri-scoprire un dispositivo "incastrato".
 
+   Senza `reset_id` (o con `reset_id: false`) l'entità usa l'ID base. In pratica **passare `reset_id` da `true` a `false` (o viceversa) cambia l'ID di quella sola entità**: è il modo più rapido per far ricomparire su Alexa un dispositivo che non vuole più saperne (vedi *Problemi tipici*).
+
 3. **ID univoci stabili, niente doppioni**:
    L'`uniqueid` non dipende mai dallo stato dell'entità. Quando una luce dimmerabile/RGB va `unavailable` perde le sue funzioni e viene vista temporaneamente come On/Off: se l'ID dipendesse dal tipo, cambierebbe e Alexa la vedrebbe come un dispositivo nuovo, creando doppioni. Qui l'ID resta sempre lo stesso.
 
@@ -107,6 +109,21 @@ emulated_hue:
 | `expose_by_default` | `true` | Con `false` vengono esposte solo le entità elencate in `entities` (consigliato; attiva anche l'auto-pulizia). |
 | `upnp_allowed_ips` | *(vuoto)* | Lista di IP a cui il bridge risponde durante la ricerca dispositivi. Se vuota o assente, risponde a tutti (comportamento originale). |
 
+<details>
+<summary>Opzioni avanzate (raramente necessarie)</summary>
+
+| Opzione | Default | Descrizione |
+| ----- | ----- | ----- |
+| `advertise_ip` | `host_ip` | IP comunicato agli Echo, se diverso da quello su cui il bridge ascolta (es. Home Assistant dietro NAT o in Docker). |
+| `advertise_port` | `listen_port` | Porta comunicata agli Echo, se diversa da `listen_port`. |
+| `upnp_bind_multicast` | `true` | Con `false` il responder SSDP si lega all'IP di `host_ip` invece che a tutte le interfacce. |
+| `exposed_domains` | `switch`, `light`, `group`, `input_boolean`, `media_player`, `fan` | Domini esposti automaticamente quando `expose_by_default` è `true`. |
+| `off_maps_to_on_domains` | `script`, `scene` | Domini per cui anche il comando "spegni" esegue l'accensione (script e scene non hanno uno stato "spento"). |
+| `lights_all_dimmable` | `false` | Con `true` le luci On/Off vengono presentate ad Alexa come dimmerabili (compatibilità con vecchie installazioni). |
+| `type` | `google_home` | Non usarla: `alexa` attiva la modalità legacy (vedi *Modalità legacy*). |
+
+</details>
+
 ### Opzioni per entità
 
 | Opzione | Descrizione |
@@ -114,7 +131,7 @@ emulated_hue:
 | `name` | Nome con cui l'entità compare in Alexa. |
 | `hidden` | Con `true` l'entità non viene esposta (e il suo ID viene rimosso all'avvio). |
 | `hue_type` | `"other"` o `"light"` (vedi tabella sotto). |
-| `reset_id` | Con `true` genera un nuovo ID univoco (vedi *Caratteristiche*, punto 2). |
+| `reset_id` | `true` / `false`: sceglie quale ID univoco usa l'entità. Cambiarlo dà all'entità un ID nuovo (vedi *Caratteristiche*, punto 2). |
 
 ### Valori supportati per `hue_type`:
 
@@ -202,6 +219,10 @@ emulated_hue:
 1. Se avevi spento gli altri Echo, una volta completata con successo la scoperta dei dispositivi puoi **riaccenderli**.
 2. Esegui un test rapido accendendo/spegnendo un paio di entità (sia di tipo luce che di tipo other) per confermare la piena operatività.
 
+## 🕰️ Modalità legacy (`type: alexa`)
+
+Se nello YAML è presente `type: alexa`, il componente lavora in una vecchia modalità di compatibilità: invece dei numeri progressivi (1, 2, 3...) gli Echo ricevono direttamente gli `entity_id` come identificativi, e nel log compare un avviso. Non ci sono motivi per usarla: **togli la riga `type`** dalla configurazione per usare la modalità normale.
+
 ## 🔁 Passaggio dall'integrazione ufficiale
 
 - **File degli ID**: se arrivi dall'Emulated Hue ufficiale, il file `.storage/emulated_hue.ids` viene convertito automaticamente nel formato di questo componente al primo avvio. Le associazioni numero ↔ entità restano identiche. Se preferisci ripartire da zero, segui la procedura *Come aggiornare i dispositivi già presenti su Alexa*.
@@ -241,8 +262,14 @@ logger:
 UPNP M-SEARCH da 192.168.1.50 accettato: ...
 UPNP risposta a 192.168.1.50: ...
 UPNP M-SEARCH da 192.168.1.60 ignorato (non autorizzato)
-HTTP GET /api/nouser/lights/12 da 192.168.1.50 -> 200
-HTTP PUT /api/nouser/lights/12/state da 192.168.1.50 -> 200
+HTTP GET /api/nouser/lights/12 (switch.forno) da 192.168.1.50 -> 200
+HTTP PUT /api/nouser/lights/12/state (switch.forno) da 192.168.1.50 -> 200
+```
+
+All'avvio, a livello `INFO` (visibile senza debug se il logger è almeno a `info`), compare anche un riepilogo:
+
+```text
+Emulated Hue avviato su 192.168.1.100:80 · 54 entità esposte · master: 192.168.1.50
 ```
 
 | Riga | Significato |
@@ -250,14 +277,19 @@ HTTP PUT /api/nouser/lights/12/state da 192.168.1.50 -> 200
 | `M-SEARCH da <IP> accettato` | Un dispositivo autorizzato (il tuo master) sta cercando il bridge. |
 | `risposta a <IP>` | Il bridge ha risposto: quel dispositivo può trovare e collegare le entità. |
 | `M-SEARCH da <IP> ignorato (non autorizzato)` | Un dispositivo non presente in `upnp_allowed_ips` ha cercato il bridge ed è stato ignorato. È normale: gli Echo e molti altri dispositivi (TV, media server...) fanno queste ricerche di continuo. |
-| `HTTP GET .../lights/<N>` | Un Echo legge lo stato del dispositivo numero N. Il master lo fa di continuo, anche senza comandi. |
-| `HTTP PUT .../lights/<N>/state` | Un **comando** (accendi/spegni/dimmera) sul dispositivo N. Il numero finale è l'esito: `200` = eseguito. |
+| `HTTP GET .../lights/<N> (<entità>)` | Un Echo legge lo stato del dispositivo numero N; tra parentesi l'entità di Home Assistant corrispondente. Il master lo fa di continuo, anche senza comandi. |
+| `HTTP PUT .../lights/<N>/state (<entità>)` | Un **comando** (accendi/spegni/dimmera) su quell'entità. Il numero finale è l'esito: `200` = eseguito. |
+| `(numero sconosciuto)` | Un Echo usa un numero che non esiste più (entità rimossa). Di solito è un vecchio dispositivo rimasto nell'app Alexa: cancellalo. |
 
 **Problemi tipici:**
 - **La ricerca su Alexa non trova nulla** e nel log non compare mai `accettato`: l'IP in `upnp_allowed_ips` non è quello del master (o è cambiato), oppure il master è spento/su un'altra rete.
 - **Nessuna riga `M-SEARCH`**: il debug non è attivo, oppure gli Echo non sono nella stessa rete di Home Assistant.
 - **Dispositivi "non risponde" ma nel log ci sono i `GET` del master**: il bridge funziona e l'Echo lo legge in locale, ma non riceve i comandi dal cloud Amazon. Se dando un comando non compare nessun `PUT`, l'Echo master è bloccato: togligli corrente per qualche minuto e riaccendilo.
 - **Dispositivi legati a un Echo sbagliato**: nel log compaiono `GET` da un IP diverso dal master. Rimuovi quei dispositivi dall'app Alexa e ripeti la ricerca: con il filtro attivo torneranno sul master.
+- **L'Echo master non esegue nessun comando, nemmeno quelli che non c'entrano con la casa** (meteo, timer, musica): ha perso il collegamento col cloud Amazon. Continua a leggere il bridge in locale (nel log ci sono i suoi `GET`), ma i comandi non gli arrivano e l'app mostra tutto come "non risponde". Togligli corrente per qualche minuto e riaccendilo.
+- **Un dispositivo cancellato dall'app Alexa non ricompare con la ricerca**: nel log si vede che il master, durante la ricerca, legge anche quel numero con `200`, ma Alexa lo scarta perché ricorda l'ID appena cancellato. Cambia `reset_id` di quella sola entità (da `true` a `false` o viceversa), riavvia Home Assistant e ripeti *"Alexa, scopri dispositivi"*: con l'ID nuovo viene ricreato subito. Le altre entità non cambiano.
+- **"Non ho trovato nuovi dispositivi"** dopo una ricerca: è normale se tutti i dispositivi sono già presenti in Alexa con lo stesso ID. Alexa annuncia solo quelli nuovi, gli altri li aggiorna in silenzio.
+- **Il master legge sempre e solo una parte dei dispositivi**: è normale. In uso quotidiano Alexa interroga ciclicamente solo un gruppo di dispositivi; durante una ricerca, invece, li legge tutti (nel log compaiono `GET /description.xml` e poi tutte le luci in pochi istanti). Per capire se un dispositivo funziona conta il `PUT` quando gli dai un comando, non i `GET`.
 
 ## 📊 Sensori di diagnostica
 
